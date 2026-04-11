@@ -1,6 +1,6 @@
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
-@EndUserText.label: 'Analytic Query for Sales Dashboard'
+@EndUserText.label: 'Analytic Query for Sales Dashboard for fiori'
 @Metadata.ignorePropagatedAnnotations: false
 @VDM.viewType: #CONSUMPTION
 @Analytics.query: true
