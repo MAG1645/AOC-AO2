@@ -2,6 +2,7 @@
 @EndUserText.label: 'Supplement processor projection entity'
 @Metadata.ignorePropagatedAnnotations: false
 @VDM.viewType: #CONSUMPTION
+@Metadata.allowExtensions: true
 define view entity ZATS_AB_BOOKSUPPL_PROCESSOR as projection on ZATS_AB_BOOKSUPPL
 {
     key TravelId,

@@ -1,0 +1,61 @@
+//managed will tell RAP that developer want RAP to create most of code automatically
+managed
+//In case developer want to plug extra coding, this is the class where we can do it
+implementation in class zbp_ats_ab_travel unique;
+//Tell the RAP engine to syntax check our code strictly
+strict ( 2 );
+
+//Root Entity behavior
+define behavior for ZATS_AB_TRAVEL alias Travel
+//Tell the RAP that it should WRITE, UPDATE, MODIFY, DELETE data from which table
+persistent table /dmo/travel_m
+//How the data will be locked ENQUEUE, DEQUEUE - if the travel data is locked by used, other
+//users parallely cannot edit its bookings and supplements
+lock master
+//To Control data security - permission - authorization of who can create, edit, delete data
+//TODO: Developer must implement coding for this line in class - I AM SKIPPING IT TO SHOW YOU WAT HAPPENS ;)
+authorization master ( instance )
+//it is a field which is used by framework to evaluate whether data was changed in meanwhile OR not
+etag master LastChangedAt
+{
+  //Behavior what we want RAP to generate for us
+  create;
+  update;
+  delete;
+  //static feature control which says that a user cannot change primary key in update mode
+  //field ( readonly ) TravelId;
+  //That create of booking depends on travel, like you cannot create a so line item w/o creating header
+  association _Booking { create; }
+}
+
+//Behavior for Booking entity
+define behavior for ZATS_AB_BOOKING alias Booking
+persistent table /dmo/booking_m
+//if parent data is locked child is also locked automatically
+lock dependent by _Travel
+//lets check the authorization and role @ parent if that pass, we allow booking also to be updated
+authorization dependent by _Travel
+etag master LastChangedAt
+{
+  //user is allowed to only change and delete booking independently
+  update;
+  delete;
+  //While user is editing the booking data, they cannot change the travel header data
+  field ( readonly ) TravelId;
+  association _Travel;
+  //Supplement creation is possible with booking
+  association _BookingSuppl { create; }
+}
+
+define behavior for ZATS_AB_BOOKSUPPL alias BookSuppl
+persistent table /dmo/booksuppl_m
+lock dependent by _Travel
+authorization dependent by _Travel
+etag master LastChangedAt
+{
+  update;
+  delete;
+  field ( readonly ) TravelId, BookingId;
+  association _Travel;
+  association _Booking;
+}
