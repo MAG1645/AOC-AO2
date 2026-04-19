@@ -26,6 +26,23 @@ etag master LastChangedAt
   //field ( readonly ) TravelId;
   //That create of booking depends on travel, like you cannot create a so line item w/o creating header
   association _Booking { create; }
+
+  mapping for /dmo/travel_m{
+    TravelId = travel_id;
+    BeginDate = begin_date;
+    EndDate = end_date;
+    AgencyId = agency_id;
+    CustomerId = customer_id;
+    CurrencyCode = currency_code;
+    TotalPrice = total_price;
+    BookingFee = booking_fee;
+    LastChangedAt = last_changed_at;
+    LastChangedBy = last_changed_by;
+    CreatedBy = created_by;
+    CreatedAt = created_at;
+    Description = description;
+    OverallStatus = overall_status;
+  }
 }
 
 //Behavior for Booking entity
@@ -45,6 +62,20 @@ etag master LastChangedAt
   association _Travel;
   //Supplement creation is possible with booking
   association _BookingSuppl { create; }
+
+  mapping for /dmo/booking_m{
+    travelid = travel_id;
+    bookingid = booking_id;
+    BookingDate = booking_date;
+    CustomerId = customer_id;
+    CarrierId = carrier_id;
+    ConnectionId = connection_id;
+    FlightDate = flight_date;
+    FlightPrice = flight_price;
+    CurrencyCode = currency_code;
+    BookingStatus = booking_status;
+    LastChangedAt = last_changed_at;
+  }
 }
 
 define behavior for ZATS_AB_BOOKSUPPL alias BookSuppl
@@ -58,4 +89,14 @@ etag master LastChangedAt
   field ( readonly ) TravelId, BookingId;
   association _Travel;
   association _Booking;
+
+  mapping for /dmo/booksuppl_m{
+    TravelId = travel_id;
+    BookingId = booking_id;
+    BookingSupplementId = booking_supplement_id;
+    SupplementId = supplement_id;
+    Price = price;
+    CurrencyCode = currency_code;
+    LastChangedAt = last_changed_at;
+  }
 }
