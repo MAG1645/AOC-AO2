@@ -37,9 +37,24 @@ CLASS zcl_ats_ab_eml IMPLEMENTATION.
                 REPORTED data(lt_reported)
                 .
 
+            ""read dependent booking data fro travel
+            READ ENTITIES OF ZATS_AB_TRAVEL
+                ENTITY Travel
+                BY \_Booking ALL FIELDS WITH
+                CORRESPONDING #( lt_result )
+                RESULT data(lt_result_book)
+                FAILED lt_failed
+                REPORTED lt_reported
+                .
+
             out->write(
               EXPORTING
                 data   = lt_result
+            ).
+
+            out->write(
+              EXPORTING
+                data   = lt_result_book
             ).
 
             out->write(
