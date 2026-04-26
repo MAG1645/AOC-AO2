@@ -1,0 +1,5 @@
+CLASS zbp_ats_ab_booking DEFINITION PUBLIC ABSTRACT FINAL FOR BEHAVIOR OF zats_ab_travel.
+ENDCLASS.
+
+CLASS zbp_ats_ab_booking IMPLEMENTATION.
+ENDCLASS.
