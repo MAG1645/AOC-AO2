@@ -7,6 +7,10 @@ CLASS lhc_Travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
       IMPORTING keys REQUEST requested_features FOR travel RESULT result.
     METHODS copytravel FOR MODIFY
       IMPORTING keys FOR ACTION travel~copytravel.
+    METHODS recalctotalprice FOR MODIFY
+      IMPORTING keys FOR ACTION travel~recalctotalprice.
+    METHODS calctotalprice FOR DETERMINE ON MODIFY
+      IMPORTING keys FOR travel~calctotalprice.
     METHODS earlynumbering_cba_booking FOR NUMBERING
       IMPORTING entities FOR CREATE travel\_booking.
     METHODS earlynumbering_create FOR NUMBERING
@@ -232,6 +236,43 @@ CLASS lhc_Travel IMPLEMENTATION.
        <new_travel>-EndDate = cl_abap_context_info=>get_system_date( ) + 30.
        <new_travel>-OverallStatus = 'N'.
 
+       ""Booking data prepration
+       "We have to pass %cid_ref to tell system, that the bookings belongs to
+       "which travel request - a record was inserted in itab for booking
+       append value #( %cid_ref = keys[ key entity %tky = <travel>-%tky ]-%cid
+                     ) to bookings_cba assIGNING fiELD-SYMBOL(<booking_cba>).
+
+       ""Preapre all the bookings from existing request which needs to be copied
+       loop at book_read_result assIGNING fiELD-SYMBOL(<booking>) where travelid =  <travel>-TravelId.
+
+        ""Lets pass a unique booking cid - Concatenate the CID of travel with BookingId of existing travel
+        append value #( %cid = keys[ key entity %tky = <travel>-%tky ]-%cid && <booking>-BookingId
+                        %data = corRESPONDING #( book_read_result[ key entity %tky = <booking>-%tky ] except travelid ) )
+                to <booking_cba>-%target assIGNING fiELD-SYMBOL(<new_booking>).
+
+        <new_booking>-BookingStatus = 'N'.
+
+        """---start of supplement
+           ""Booking data prepration
+           "We have to pass %cid_ref to tell system, that the bookings belongs to
+           "which travel request - a record was inserted in itab for booking
+           append value #( %cid_ref = keys[ key entity %tky = <travel>-%tky ]-%cid && <booking>-BookingId
+                         ) to booksuppl_cba assIGNING fiELD-SYMBOL(<booksuppl_cba>).
+
+           ""Preapre all the bookings from existing request which needs to be copied
+           loop at booksuppl_read_result assIGNING fiELD-SYMBOL(<book_suppl>) using key entity where travelid =  <travel>-TravelId
+                                                                                and bookingid =  <booking>-BookingId.
+
+            ""Lets pass a unique booking cid - Concatenate the CID of travel with BookingId of existing travel
+            append value #( %cid = keys[ key entity %tky = <travel>-%tky ]-%cid && <booking>-BookingId && <book_suppl>-BookingSupplementId
+                            %data = corRESPONDING #( <book_suppl> except travelid bookingid ) )
+                    to <booksuppl_cba>-%target.
+           endloop.
+        """---end of sumpplement
+
+
+       enDLOOP.
+
 
 
     enDLOOP.
@@ -241,14 +282,125 @@ CLASS lhc_Travel IMPLEMENTATION.
         entity travel
          create fields ( agencyid customerid begindate enddate bookingfee totalprice currencycode overallstatus )
            with travels
+            create by \_Booking fields ( bookingid bookingdate customerid carrierid connectionid flightdate flightprice currencycode bookingstatus )
+                with bookings_cba
+                enTITY booking
+                 create by \_BookingSuppl fields ( BookingSupplementId SupplementId Price CurrencyCode )
+                    with booksuppl_cba
          mapped data(mapped_data).
 
-    mapped-travel = mapped_data-travel.
+    "mapped-travel = mapped_data-travel.
+    mapped = mapped_data.
 
 
 
 
 
+
+  ENDMETHOD.
+
+  METHOD reCalcTotalPrice.
+
+*    Define a structure where we can store all the Booking Fees and Currency Code
+     types : begin of ty_total_cost,
+                amount type /dmo/total_price,
+                currency type /dmo/currency_code,
+             end of ty_total_cost.
+
+     data ls_header_curr type /dmo/currency_code.
+     data amounts_per_currencycode type standard table of ty_total_cost.
+*    Read all the travel instances, subsequent Bookings inside that using EML
+*    Read all the Booking Supplements for each Booking using EML
+    read entities of zats_ab_travel in local mode
+    entity travel
+        fields ( bookingfee currencycode ) with corrESPONDING #( keys )
+        result data(travel)
+        failed failed.
+
+    read entities of zats_ab_travel in local mode
+    entity travel by \_Booking
+        fields ( flightprice currencycode ) with corrESPONDING #( travel )
+        result data(booking)
+        failed failed.
+
+    read entities of zats_ab_travel in local mode
+    entity booking by \_BookingSuppl
+        fields ( price currencycode ) with corrESPONDING #( booking )
+        result data(booksuppl)
+        failed failed.
+
+" Delete records where currencycode is empty, optionally throw error
+     delete travel where currencycode is initial.
+     delete booking where currencycode is initial.
+     delete booksuppl where currencycode is initial.
+
+*    Loop at header, item and item childs Total All the amounts in itab for Common currency
+     loop at travel assigning field-symbol(<fs_travel>).
+
+        amounts_per_currencycode = value #( ( amount = <fs_travel>-BookingFee
+                                              currency = <fs_travel>-CurrencyCode ) ).
+        ls_header_curr = <fs_travel>-CurrencyCode.
+
+        loop at booking into data(wa_booking) where travelid = <fs_travel>-travelid.
+
+            ""add all numeric column values by comparing non-numeric columns
+            collect value ty_total_cost( amount = wa_booking-FlightPrice
+                                         currency = wa_booking-CurrencyCode )
+                                         into amounts_per_currencycode.
+
+            loop at booksuppl into data(wa_suppl) where travelid = wa_booking-travelid and
+                                                          bookingid = wa_booking-bookingid.
+                collect value ty_total_cost( amount = wa_suppl-price
+                                         currency = wa_suppl-CurrencyCode )
+                                         into amounts_per_currencycode.
+
+            endloop.
+
+        endloop.
+
+     endloop.
+
+     clear <fs_travel>-TotalPrice.
+
+*    Compare the currency of Booking and Supplement with header currency
+     loop at amounts_per_currencycode into data(ls_amount_per_currency).
+*           If it does not match, perform currency conversion
+        if ls_amount_per_currency-currency = ls_header_curr.
+            <fs_travel>-TotalPrice += ls_amount_per_currency-amount.
+        else.
+            /dmo/cl_flight_amdp=>convert_currency(
+              EXPORTING
+                iv_amount               = ls_amount_per_currency-amount
+                iv_currency_code_source = ls_amount_per_currency-currency
+                iv_currency_code_target = ls_header_curr
+                iv_exchange_rate_date   = cl_abap_context_info=>get_system_date(  )
+              IMPORTING
+                ev_amount               =  data(total_amt)
+            ).
+
+            <fs_travel>-TotalPrice += total_amt.
+        endif.
+
+     endloop.
+
+*    Total all the amount in a variable and set it to the Travel header level using EML
+     modify entities of zats_ab_travel in local mode
+     entity travel
+     update fields ( totalprice )
+     with corresponding #( travel ).
+*    Return the mapped data as a result of internal action
+
+
+
+  ENDMETHOD.
+
+  METHOD calcTotalPrice.
+
+    ""How to call an action using the EML
+    modify entities of zats_ab_travel in local mode
+        entity travel
+            execute reCalcTotalPrice
+            from CORRESPONDING #( keys ).
 
   ENDMETHOD.
 
