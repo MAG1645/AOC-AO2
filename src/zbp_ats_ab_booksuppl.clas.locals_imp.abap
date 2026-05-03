@@ -9,6 +9,14 @@ ENDCLASS.
 CLASS lhc_BookSuppl IMPLEMENTATION.
 
   METHOD calcTotalPriceSuppl.
+
+        ""How to call an action using the EML
+    modify entities of zats_ab_travel in local mode
+        entity travel
+            execute reCalcTotalPrice
+            from CORRESPONDING #( keys ).
+
+
   ENDMETHOD.
 
 ENDCLASS.

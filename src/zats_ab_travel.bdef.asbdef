@@ -5,6 +5,9 @@ managed;
 //Tell the RAP engine to syntax check our code strictly
 strict ( 2 );
 
+//s1: add the draft feature at BO level
+with draft;
+
 //Root Entity behavior
 define behavior for ZATS_AB_TRAVEL alias Travel
 implementation in class zbp_ats_ab_travel unique
@@ -13,6 +16,10 @@ persistent table /dmo/travel_m
 //How the data will be locked ENQUEUE, DEQUEUE - if the travel data is locked by used, other
 //users parallely cannot edit its bookings and supplements
 lock master
+//s3: Add the total etag field
+total etag LastChangedAt
+//s4: define a draft table, use quick fix to create it
+draft table zats_ab_dtrav
 //To Control data security - permission - authorization of who can create, edit, delete data
 //TODO: Developer must implement coding for this line in class - I AM SKIPPING IT TO SHOW YOU WAT HAPPENS ;)
 authorization master ( instance )
@@ -36,12 +43,32 @@ early numbering
   //we can later consume this internal action multiple place
   internal action reCalcTotalPrice;
 
+  //Check the Header data during save/update - validation
+  validation validateHeaderData on save { create; field CustomerId, BeginDate, EndDate, AgencyId ; }
+
+  //Anubhav can never book travel requested
+  determine action validateCustomer { validation validateHeaderData; }
+
+  //s2: satisfy Ego of RAP framework; to put the draft actions
+  draft determine action Prepare;
+  draft action Edit;
+  draft action Resume;
+  draft action Activate;
+  draft action Discard;
+
   //determination that calls when user save, modify booking fee
   determination calcTotalPrice on modify { field BookingFee, CurrencyCode; create; }
 
+  //Sideeffect to make fiori do a GET call to load updated data
+  side effects {
+    field BookingFee affects field TotalPrice;
+    entity _Booking affects field TotalPrice;
+  }
+
   //That create of booking depends on travel, like you cannot create a so line item w/o creating header
   // Dynamic feature control - features:instance
-  association _Booking { create ( features:instance  ); }
+  //s5: add with draft for child entity
+  association _Booking { create ( features:instance  ); with draft; }
 
   mapping for /dmo/travel_m{
     TravelId = travel_id;
@@ -65,6 +92,8 @@ early numbering
 define behavior for ZATS_AB_BOOKING alias Booking
 implementation in class zbp_ats_ab_booking unique
 persistent table /dmo/booking_m
+//s7: define the draft table for booking data, use quick fix to create booking draft tab
+draft table zats_ab_dbook
 //if parent data is locked child is also locked automatically
 lock dependent by _Travel
 //lets check the authorization and role @ parent if that pass, we allow booking also to be updated
@@ -79,9 +108,17 @@ early numbering
   //While user is editing the booking data, they cannot change the travel header data
   field ( readonly ) TravelId, BookingId;
   field ( mandatory ) CarrierId, ConnectionId, BookingDate, customerid;
-  association _Travel;
+  association _Travel { with draft; }
   //Supplement creation is possible with booking
-  association _BookingSuppl { create; }
+  //s6: add with draft for grand child entity
+
+  association _BookingSuppl { create; with draft; }
+
+  //Sideeffect to make fiori do a GET call to load updated data
+  side effects {
+    field FlightPrice affects field _Travel.TotalPrice;
+    entity _BookingSuppl affects field _Travel.TotalPrice;
+  }
 
   //determination that calls when user save, modify booking fee
   determination calcTotalPriceBook on modify { field FlightPrice, CurrencyCode; create; }
@@ -105,6 +142,8 @@ early numbering
 define behavior for ZATS_AB_BOOKSUPPL alias BookSuppl
 implementation in class zbp_ats_ab_booksuppl unique
 persistent table /dmo/booksuppl_m
+//s8: define the draft table for booking suppl data, use quick fix to create booking draft tab
+draft table zats_ab_dbooks
 lock dependent by _Travel
 authorization dependent by _Travel
 etag master LastChangedAt
@@ -114,13 +153,17 @@ early numbering
   delete;
   field ( readonly ) TravelId, BookingId, BookingSupplementId;
   field ( mandatory ) SupplementId, CurrencyCode, price;
-  association _Travel;
-  association _Booking;
+  association _Travel { with draft; }
+  association _Booking { with draft; }
 
     //determination that calls when user save, modify booking fee
     //TODO: Homework to implement the determination
   determination calcTotalPriceSuppl on modify { field Price, CurrencyCode; create; }
 
+  //Sideeffect to make fiori do a GET call to load updated data
+  side effects {
+    field Price affects field _Travel.TotalPrice;
+  }
 
   mapping for /dmo/booksuppl_m{
     TravelId = travel_id;

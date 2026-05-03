@@ -11,6 +11,8 @@ CLASS lhc_Travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
       IMPORTING keys FOR ACTION travel~recalctotalprice.
     METHODS calctotalprice FOR DETERMINE ON MODIFY
       IMPORTING keys FOR travel~calctotalprice.
+    METHODS validateheaderdata FOR VALIDATE ON SAVE
+      IMPORTING keys FOR travel~validateheaderdata.
     METHODS earlynumbering_cba_booking FOR NUMBERING
       IMPORTING entities FOR CREATE travel\_booking.
     METHODS earlynumbering_create FOR NUMBERING
@@ -104,7 +106,9 @@ CLASS lhc_Travel IMPLEMENTATION.
         travel_id_max += 1.
         entity-TravelId = travel_id_max.
 
-        append value #( %cid = entity-%cid %key = entity-%key ) to mapped-travel.
+        append value #( %cid = entity-%cid %key = entity-%key
+                        %is_draft = entity-%is_draft
+         ) to mapped-travel.
 
     endloop.
 
@@ -357,10 +361,10 @@ CLASS lhc_Travel IMPLEMENTATION.
             endloop.
 
         endloop.
-
+        clear <fs_travel>-TotalPrice.
      endloop.
 
-     clear <fs_travel>-TotalPrice.
+
 
 *    Compare the currency of Booking and Supplement with header currency
      loop at amounts_per_currencycode into data(ls_amount_per_currency).
@@ -401,6 +405,97 @@ CLASS lhc_Travel IMPLEMENTATION.
         entity travel
             execute reCalcTotalPrice
             from CORRESPONDING #( keys ).
+
+  ENDMETHOD.
+
+  METHOD validateHeaderData.
+
+    ""Step 1: Read the data of incoming request from EML
+    read entities of zats_ab_travel
+        entity travel
+            fields ( agencyid customerid begindate enddate )
+            with corresponding #( keys )
+            result data(lt_travel).
+
+    ""Step 2: Declare sorted table to hold customer ids and agency id
+    data : lt_customers type sorted table of /dmo/customer with unique key customer_id,
+           lt_agency    type sorted table of /dmo/agency   with unique key agency_id.
+
+    ""Step 3: Extract the unique customer and agency ids from travel data
+    lt_customers = correSPONDING #( lt_travel DISCARDING DUPLICATES mapping customer_id = customerid except * ).
+    lt_agency = correSPONDING #( lt_travel DISCARDING DUPLICATES mapping agency_id = agencyid except * ).
+
+    delete lt_customers where customer_id is initial.
+    delete lt_agency where agency_id is initial.
+
+    ""Step 4: Extract the Customer and Agency Data from Databased based on travel data
+    if lt_customers is not initial.
+
+        select from /dmo/customer fields customer_id
+            for all entries in @lt_customers
+                where customer_id = @lt_customers-customer_id
+                into table @data(lt_cust_db).
+
+    endif.
+    if lt_agency is not initial.
+
+        select from /dmo/agency fields agency_id
+            for all entries in @lt_agency
+                where agency_id = @lt_agency-agency_id
+                into table @data(lt_agency_db).
+
+    endif.
+
+    ""Step 5: Loop at incoming data to validate customer and agency one by one
+    loop at lt_travel into data(ls_travel).
+        ""Check if customer id is blank
+        ""OR
+        ""If in the DB customer does not exist
+        if ( ls_travel-customerid is initial OR NOT line_exists( lt_cust_db[ customer_id = ls_travel-customerid ] ) ).
+
+            append value #( %tky = ls_travel-%tky ) to failed-travel.
+            append value #( %tky = ls_travel-%tky
+                            %element-customerid = if_abap_behv=>mk-on
+                            %msg = new /dmo/cm_flight_messages(
+                                                                textid = /dmo/cm_flight_messages=>customer_unkown
+                                                                customer_id = ls_travel-CustomerId
+                                                                severity = if_abap_behv_message=>severity-error
+                            )
+             ) to reported-travel.
+
+        endif.
+
+        ""Check if customer id is blank
+        ""OR
+        ""If in the DB customer does not exist
+        if ( ls_travel-agencyid is initial OR NOT line_exists( lt_agency_db[ agency_id = ls_travel-agencyid ] ) ).
+
+            append value #( %tky = ls_travel-%tky ) to failed-travel.
+            append value #( %tky = ls_travel-%tky
+                            %element-agencyid = if_abap_behv=>mk-on
+                            %msg = new /dmo/cm_flight_messages(
+                                                                textid = /dmo/cm_flight_messages=>agency_unkown
+                                                                agency_id = ls_travel-agencyid
+                                                                severity = if_abap_behv_message=>severity-error
+                            )
+             ) to reported-travel.
+
+        endif.
+
+        ""Homework : Add following validations
+        "1. Check if the travel start date is >= todays
+        "2. Travel End date must be > Begin Date
+        "3. Travel begin and end date must not be Initial
+
+    endloop.
+
+
+
+
+
+
+
+
 
   ENDMETHOD.
 
