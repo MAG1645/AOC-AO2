@@ -1,3 +1,62 @@
+CLASS lsc_zats_ab_travel DEFINITION INHERITING FROM cl_abap_behavior_saver.
+
+  PROTECTED SECTION.
+
+    METHODS save_modified REDEFINITION.
+
+ENDCLASS.
+
+CLASS lsc_zats_ab_travel IMPLEMENTATION.
+
+  METHOD save_modified.
+""call function 'SWDD_WORKFLOW_START'
+    data: lt_log_data type standard table of /dmo/log_travel,
+          lt_final_data type standard table of /dmo/log_travel.
+
+    if update-travel is not initial.
+
+        "get all changes in our local table done by user
+        lt_log_data = corrESPONDING #( update-travel mapping travel_id = TravelId ).
+
+        loop at update-travel assIGNING fiELD-SYMBOL(<fs_changes>).
+
+            assign lt_log_data[ travel_id = <fs_changes>-TravelId ]
+                to fieLD-SYMBOL(<travel_log_db>).
+
+            get time stamp field <travel_log_db>-created_at.
+
+            if <fs_changes>-%control-CustomerId = if_abap_behv=>mk-on.
+
+                <travel_log_db>-change_id = cl_system_uuid=>create_uuid_x16_static( ).
+                <travel_log_db>-changed_field_name = 'anubhav_customer'.
+                <travel_log_db>-changed_value = <fs_changes>-CustomerId.
+                <travel_log_db>-changing_operation = 'update'.
+
+                append <travel_log_db> to lt_final_data.
+
+            endif.
+
+            if <fs_changes>-%control-AgencyId = if_abap_behv=>mk-on.
+
+                <travel_log_db>-change_id = cl_system_uuid=>create_uuid_x16_static( ).
+                <travel_log_db>-changed_field_name = 'anubhav_agency'.
+                <travel_log_db>-changed_value = <fs_changes>-AgencyId.
+                <travel_log_db>-changing_operation = 'update'.
+
+                append <travel_log_db> to lt_final_data.
+
+            endif.
+
+
+        enDLOOP.
+
+        insert /dmo/log_travel from table @lt_final_data.
+    endif.
+
+  ENDMETHOD.
+
+ENDCLASS.
+
 CLASS lhc_Travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
   PRIVATE SECTION.
 
@@ -13,6 +72,8 @@ CLASS lhc_Travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
       IMPORTING keys FOR travel~calctotalprice.
     METHODS validateheaderdata FOR VALIDATE ON SAVE
       IMPORTING keys FOR travel~validateheaderdata.
+    METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
+      IMPORTING REQUEST requested_authorizations FOR travel RESULT result.
     METHODS earlynumbering_cba_booking FOR NUMBERING
       IMPORTING entities FOR CREATE travel\_booking.
     METHODS earlynumbering_create FOR NUMBERING
@@ -22,11 +83,69 @@ ENDCLASS.
 
 CLASS lhc_Travel IMPLEMENTATION.
 
+  METHOD get_global_authorizations.
+
+    Authority-check object 'ZATS_AB'
+               ID 'ACTVT' field '02'.
+
+  ENDMETHOD.
+
   METHOD get_instance_authorizations.
-*    data: lt_failed type response for failed early zats_ab_travel.
-*    data: lt_reported type response for REPORTED early zats_ab_travel.
-*    data : lt_test type response for MAPPED zats_ab_travel//travel.
-    "AUTHORITY-CHECK
+
+*    When a user tries to edit a travel request,
+*    if the travel request status is CANCELLED,
+*    then we need to check if the given user is a MANAGER.
+*    If yes, they can edit the cancelled request also.
+*    However else, the user is not allowed to edit cancelled request.
+
+
+    "Step 1: Define a return data structure of return table
+    data ls_return like line of result.
+
+    "Step 2: Read the instance of the BO, read overallstatus
+    read entities of zats_ab_travel in local mode
+        entity travel
+        fields ( travelid overallstatus )
+        with corrESPONDING #( keys )
+        result data(lt_travel)
+        failed data(lt_failed).
+
+    "Step 3: Check if the status is CANCELLED
+    loop at lt_travel into data(ls_travel).
+
+        data(lv_auth) = abap_false.
+
+        if ( ls_travel-OverallStatus = 'X' ).
+
+            Authority-check object 'ZATS_AB'
+               ID 'ACTVT' field '02'.
+
+            IF SY-SUBRC = 0. "PASS user is manager
+                lv_auth = abap_true.
+            endif.
+
+        else.
+            lv_auth = abap_true.
+        endIF.
+
+        ls_return = value #(  travelid =  ls_travel-TravelId
+                              %action-Edit = cond #(
+                                                    when lv_auth eq abap_false
+                                                        then if_abap_behv=>auth-unauthorized
+                                                        else if_abap_behv=>auth-allowed
+                              )
+                              %update = cond #(
+                                                    when lv_auth eq abap_false
+                                                        then if_abap_behv=>auth-unauthorized
+                                                        else if_abap_behv=>auth-allowed
+                              )
+         ).
+
+        append ls_return to result.
+
+    endloop.
+
+
   ENDMETHOD.
 
   METHOD earlynumbering_create.
@@ -470,8 +589,8 @@ CLASS lhc_Travel IMPLEMENTATION.
         ""If in the DB customer does not exist
         if ( ls_travel-agencyid is initial OR NOT line_exists( lt_agency_db[ agency_id = ls_travel-agencyid ] ) ).
 
-            append value #( %tky = ls_travel-%tky ) to failed-travel.
-            append value #( %tky = ls_travel-%tky
+            append value #( %tky = ls_travel-%tky %is_draft = ls_travel-%is_draft ) to failed-travel.
+            append value #( %tky = ls_travel-%tky %is_draft = ls_travel-%is_draft
                             %element-agencyid = if_abap_behv=>mk-on
                             %msg = new /dmo/cm_flight_messages(
                                                                 textid = /dmo/cm_flight_messages=>agency_unkown
@@ -498,5 +617,7 @@ CLASS lhc_Travel IMPLEMENTATION.
 
 
   ENDMETHOD.
+
+
 
 ENDCLASS.

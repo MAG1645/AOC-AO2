@@ -1,12 +1,12 @@
 //managed will tell RAP that developer want RAP to create most of code automatically
-managed;
+managed implementation in class zbp_ats_ab_travel unique;
 //In case developer want to plug extra coding, this is the class where we can do it
 
 //Tell the RAP engine to syntax check our code strictly
 strict ( 2 );
 
-//s1: add the draft feature at BO level
-with draft;
+//s1: add the draft feature at BO level zkas
+with collaborative draft;
 
 //Root Entity behavior
 define behavior for ZATS_AB_TRAVEL alias Travel
@@ -19,7 +19,7 @@ lock master
 //s3: Add the total etag field
 total etag LastChangedAt
 //s4: define a draft table, use quick fix to create it
-draft table zats_ab_dtrav
+draft table zats_ab_dtrav query zats_ab_travq
 //To Control data security - permission - authorization of who can create, edit, delete data
 //TODO: Developer must implement coding for this line in class - I AM SKIPPING IT TO SHOW YOU WAT HAPPENS ;)
 authorization master ( instance )
@@ -27,9 +27,12 @@ authorization master ( instance )
 etag master LastChangedAt
 //We want as a developer to take control of creating Travel ID
 early numbering
+//additional save - once RAP completes all of its activities
+//as a developer you can 100% sure that a save was successfully triggered in DB
+with additional save
 {
   //Behavior what we want RAP to generate for us
-  create;
+  create ( authorization : global );
   update;
   delete;
   //static feature control which says that a user cannot change primary key in update mode
@@ -46,8 +49,10 @@ early numbering
   //Check the Header data during save/update - validation
   validation validateHeaderData on save { create; field CustomerId, BeginDate, EndDate, AgencyId ; }
 
-  //Anubhav can never book travel requested
-  determine action validateCustomer { validation validateHeaderData; }
+  //you can invoke it by a button click or using side effect (on fly while draft)
+  determine action validateCustomer {
+            validation validateHeaderData;
+   }
 
   //s2: satisfy Ego of RAP framework; to put the draft actions
   draft determine action Prepare;
@@ -55,6 +60,7 @@ early numbering
   draft action Resume;
   draft action Activate;
   draft action Discard;
+  draft action Share;
 
   //determination that calls when user save, modify booking fee
   determination calcTotalPrice on modify { field BookingFee, CurrencyCode; create; }
@@ -63,6 +69,9 @@ early numbering
   side effects {
     field BookingFee affects field TotalPrice;
     entity _Booking affects field TotalPrice;
+    //side effect which trigger the validation on fly
+    determine action validateCustomer executed on field CustomerId
+                                        affects messages;
   }
 
   //That create of booking depends on travel, like you cannot create a so line item w/o creating header
