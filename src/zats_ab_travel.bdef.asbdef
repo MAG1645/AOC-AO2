@@ -32,8 +32,8 @@ early numbering
 with additional save
 {
   //Behavior what we want RAP to generate for us
-  create ( authorization : global );
-  update;
+  create ( authorization : global , precheck );
+  update (precheck);
   delete;
   //static feature control which says that a user cannot change primary key in update mode
   field ( readonly ) TravelId;
@@ -41,6 +41,10 @@ with additional save
 
   //Since we want to create new BO instance (Factory), Our reference is mohan's (instance)
   factory action copyTravel[1];
+
+  //non factory data action - change the state of the instance of a BO
+  action ( features: instance )   acceptTravel result[1] $self;
+  action ( features: instance )   rejectTravel result[1] $self;
 
   ///Here we write internal action to calculate total cost of travel
   //we can later consume this internal action multiple place
@@ -130,7 +134,7 @@ early numbering
   }
 
   //determination that calls when user save, modify booking fee
-  determination calcTotalPriceBook on modify { field FlightPrice, CurrencyCode; create; }
+  determination calcTotalPriceBook on modify { field FlightPrice, CurrencyCode;  }
 
 
   mapping for /dmo/booking_m{
@@ -167,7 +171,7 @@ early numbering
 
     //determination that calls when user save, modify booking fee
     //TODO: Homework to implement the determination
-  determination calcTotalPriceSuppl on modify { field Price, CurrencyCode; create; }
+  determination calcTotalPriceSuppl on modify { field Price, CurrencyCode;  }
 
   //Sideeffect to make fiori do a GET call to load updated data
   side effects {

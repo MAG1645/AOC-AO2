@@ -4,10 +4,11 @@ use side effects;
 use collaborative draft;
 
 define behavior for ZATS_AB_TRAVEL_PROCESSOR alias Travel
-
+//now we have another behavior imp class in behavior pool
+implementation in class zcl_ats_ab_trav_proc unique
 {
-  use create;
-  use update;
+  use create (augment) ;
+  use update ;
   use delete;
 
 

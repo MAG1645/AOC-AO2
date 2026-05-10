@@ -74,10 +74,35 @@ CLASS lhc_Travel DEFINITION INHERITING FROM cl_abap_behavior_handler.
       IMPORTING keys FOR travel~validateheaderdata.
     METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
       IMPORTING REQUEST requested_authorizations FOR travel RESULT result.
+    METHODS precheck_create FOR PRECHECK
+      IMPORTING entities FOR CREATE travel.
+
+    METHODS precheck_update FOR PRECHECK
+      IMPORTING entities FOR UPDATE travel.
+    METHODS accepttravel FOR MODIFY
+      IMPORTING keys FOR ACTION travel~accepttravel RESULT result.
+
+    METHODS rejecttravel FOR MODIFY
+      IMPORTING keys FOR ACTION travel~rejecttravel RESULT result.
     METHODS earlynumbering_cba_booking FOR NUMBERING
       IMPORTING entities FOR CREATE travel\_booking.
     METHODS earlynumbering_create FOR NUMBERING
       IMPORTING entities FOR CREATE travel.
+
+    "declare data types for input and output for my reuse method
+    types: t_entity_Create type table for create zats_ab_travel,
+           t_entity_Update type table for update zats_ab_travel,
+           t_entity_Reported type table for reported zats_ab_travel,
+           t_entity_Failed type table for failed zats_ab_travel.
+
+    "reusable method
+    methods precheck_anubhav_reuse
+        importing
+            entity_u type t_entity_Update optional
+            entity_c type t_entity_Create optional
+        exporting
+            reported type t_entity_Reported
+            failed   type t_entity_Failed.
 
 ENDCLASS.
 
@@ -304,8 +329,19 @@ CLASS lhc_Travel IMPLEMENTATION.
     endif.
 
 
+
     result = value #(  for travel in lt_travel ( %tky = travel-%tky
-                                                 %assoc-_Booking = lv_allow ) ).
+                                                 %assoc-_Booking = lv_allow
+                                                 %features-%action-acceptTravel =
+                                                        cond #( when travel-OverallStatus = 'A'
+                                                                    then if_abap_behv=>fc-o-disabled
+                                                                    else if_abap_behv=>fc-o-enabled )
+                                                 %features-%action-rejectTravel =
+                                                        cond #( when travel-OverallStatus = 'X'
+                                                                    then if_abap_behv=>fc-o-disabled
+                                                                    else if_abap_behv=>fc-o-enabled )
+
+                                                  ) ).
 
 
 
@@ -619,5 +655,160 @@ CLASS lhc_Travel IMPLEMENTATION.
   ENDMETHOD.
 
 
+
+  METHOD precheck_anubhav_reuse.
+
+    "step 1: data declaration
+    data : entities   type t_entity_update,
+           operation  type if_abap_behv=>t_char01,
+           agencies   type sorted table of /dmo/agency with unique key agency_id,
+           customers  type sorted table of /dmo/customer with unique key customer_id.
+
+
+    ""Step 2: check atleast either create data or update data was passed
+    assert not ( entity_c is initial equiv entity_u is initial ).
+
+    ""Step 3: map the data to a single table
+    if entity_c is not initial.
+        entities = corresponding #( entity_c ).
+        operation = if_abap_behv=>op-m-create.
+    else.
+        entities = entity_u.
+        operation = if_abap_behv=>op-m-update.
+    endif.
+
+    ""Step 4: clear the data in case user modified fields other than agency and customer
+    delete entities where %control-AgencyId = if_abap_behv=>mk-off
+                         and %control-CustomerId = if_abap_behv=>mk-off.
+
+    ""Step 5: filter only the unique agencies and customers
+    agencies = corresponding #( entities discarding duplicates mapping agency_id = agencyid except * ).
+    customers = corresponding #( entities discarding duplicates mapping customer_id = customerid except * ).
+
+    ""Step 6: call db tables for master data to load valid customers and agencies
+    select from /dmo/agency fields agency_id, country_code
+            for all entries in @agencies where agency_id = @agencies-agency_id
+            into table @data(lt_agency_country).
+    select from /dmo/customer fields customer_id, country_code
+            for all entries in @customers where customer_id = @customers-customer_id
+            into table @data(lt_customer_country).
+
+    ""Step 7: loop at all the incoming data for validation and compare the countries of customer and agency
+    loop at entities into data(entity).
+
+        read table lt_agency_country with key agency_id = entity-AgencyId into data(ls_agency_val).
+        check sy-subrc = 0.
+        read table lt_customer_country with key customer_id = entity-customerid into data(ls_customer_val).
+        check sy-subrc = 0.
+
+        ""if condition to check if they both belongs to same country, if not, Throw the error
+        if ls_agency_val-country_code <> ls_customer_val-country_code.
+
+            ""Step 8 : inform the RAP framework that something is fishy
+            append value #(
+                            %cid = cond #( when operation = if_abap_behv=>op-m-create
+                                                then entity-%cid_ref
+                            )
+                            %is_draft = entity-%is_draft
+                            %fail-cause = if_abap_behv=>cause-conflict
+
+             ) to failed.
+            append value #(
+                            %cid = cond #( when operation = if_abap_behv=>op-m-create
+                                                then entity-%cid_ref
+                            )
+                            %is_draft = entity-%is_draft
+                            %msg = new /dmo/cm_flight_messages(
+                                                                 textid = value #( msgid = 'SY' msgno = 499
+                                                                                   attr1 = 'The country code for '
+                                                                                   attr2 = | { entity-agencyid } and |
+                                                                                   attr3 = entity-customerid
+                                                                                   attr4 = 'does not match'
+                                                                 )
+                                                                 agency_id = entity-agencyid
+                                                                 customer_id = entity-customerid
+                                                                 severity = if_abap_behv_message=>severity-error
+                                                              )
+                            %element-agencyid = if_abap_behv=>mk-on
+
+             ) to reported.
+
+        endif.
+    endloop.
+  ENDMETHOD.
+
+  METHOD precheck_create.
+
+    precheck_anubhav_reuse(
+      EXPORTING
+*        entity_u =
+        entity_c = entities
+      IMPORTING
+        reported = reported-travel
+        failed   = failed-travel
+    ).
+
+  ENDMETHOD.
+
+  METHOD precheck_update.
+
+    precheck_anubhav_reuse(
+      EXPORTING
+        entity_u = entities
+*        entity_c =
+      IMPORTING
+        reported = reported-travel
+        failed   = failed-travel
+    ).
+
+  ENDMETHOD.
+
+  METHOD acceptTravel.
+
+    "Change the travel status to Approved using EML
+    modify entities of zats_ab_travel
+        entity travel
+        update fields ( overallstatus )
+        with value #( for key in keys ( %tky = key-%tky
+                                        %is_draft = key-%is_draft
+                                        OverallStatus = 'A'
+         ) ).
+
+     "Read the data of BO instance again
+     read entities of zats_ab_travel
+        entity travel
+        all fields
+        with corRESPONDING #( keys )
+        result data(lt_result).
+
+     "return the data out
+     result = value #( for travel in lt_result ( %tky = travel-%tky %param = travel ) ).
+
+  ENDMETHOD.
+
+  METHOD rejectTravel.
+
+
+    "Change the travel status to Approved using EML
+    modify entities of zats_ab_travel
+        entity travel
+        update fields ( overallstatus )
+        with value #( for key in keys ( %tky = key-%tky
+                                        %is_draft = key-%is_draft
+                                        OverallStatus = 'X'
+         ) ).
+
+     "Read the data of BO instance again
+     read entities of zats_ab_travel
+        entity travel
+        all fields
+        with corRESPONDING #( keys )
+        result data(lt_result).
+
+     "return the data out
+     result = value #( for travel in lt_result ( %tky = travel-%tky %param = travel ) ).
+
+
+  ENDMETHOD.
 
 ENDCLASS.

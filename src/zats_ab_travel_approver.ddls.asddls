@@ -3,7 +3,7 @@
 @Metadata.ignorePropagatedAnnotations: false
 @VDM.viewType: #CONSUMPTION
 @Metadata.allowExtensions: true
-define root view entity ZATS_AB_TRAVEL_PROCESSOR as projection on ZATS_AB_TRAVEL
+define root view entity ZATS_AB_TRAVEL_APPROVER as projection on ZATS_AB_TRAVEL
 {
     key TravelId,
     AgencyId,
@@ -23,15 +23,9 @@ define root view entity ZATS_AB_TRAVEL_PROCESSOR as projection on ZATS_AB_TRAVEL
     CustomerName,
     StatusText,
     Minion,
-    @ObjectModel.virtualElementCalculatedBy: 'ABAP:ZCL_ATS_AB_VE'
-    @EndUserText.label: 'CO2 Tax'
-    virtual CO2Tax: abap.int4,
-    @ObjectModel.virtualElementCalculatedBy: 'ABAP:ZCL_ATS_AB_VE'
-    @EndUserText.label: 'Day Of Travel'
-    virtual dayOfFlight: abap.char(10),
     /* Associations */
     _Agency,
-    _Booking : redirected to composition child ZATS_AB_BOOKING_PROCESSOR,
+    _Booking : redirected to composition child ZATS_AB_BOOKING_APPROVER,
     _Currency,
     _Customer,
     _OverallStatus
