@@ -83,6 +83,9 @@ with additional save
   //s5: add with draft for child entity
   association _Booking { create ( features:instance  ); with draft; }
 
+  //now we allow creation of attachment with header
+  association _Attachments { create ; with draft; }
+
   mapping for /dmo/travel_m{
     TravelId = travel_id;
     BeginDate = begin_date;
@@ -186,5 +189,40 @@ early numbering
     Price = price;
     CurrencyCode = currency_code;
     LastChangedAt = last_changed_at;
+  }
+}
+
+//Behavior for Booking entity
+define behavior for ZATS_AB_M_ATTACH alias Attachment
+persistent table zats_ab_attach
+//s7: define the draft table for booking data, use quick fix to create booking draft tab
+draft table zats_ab_dattach
+//if parent data is locked child is also locked automatically
+lock dependent by _Travel
+//lets check the authorization and role @ parent if that pass, we allow booking also to be updated
+authorization dependent by _Travel
+etag master LastChangedAt
+{
+  //user is allowed to only change and delete booking independently
+  update;
+  delete;
+  //While user is editing the booking data, they cannot change the travel header data
+  field ( numbering : managed ) id;
+  field ( readonly ) TravelId;
+
+  association _Travel { with draft; }
+
+  mapping for zats_ab_attach{
+    travelid = travel_id;
+    id = id;
+    attachment = attachment;
+    filetype = filetype;
+    filename = filename;
+    memo = memo;
+    lastchangedat = last_changed_at;
+    LocalCreatedAt = local_created_at;
+    LocalCreatedBy = local_created_by;
+    LocalLastChangedAt = local_last_changed_at;
+    LocalLastChangedBy = local_last_changed_by;
   }
 }

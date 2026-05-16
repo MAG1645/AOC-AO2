@@ -4,6 +4,7 @@
 @VDM.viewType: #COMPOSITE
 define root view entity ZATS_AB_TRAVEL as select from /dmo/travel_m
 composition[0..*] of ZATS_AB_BOOKING as _Booking
+composition[0..*] of ZATS_AB_M_ATTACH as _Attachments
 association of one to one /DMO/I_Agency as _Agency on
     $projection.AgencyId = _Agency.AgencyID
 association of one to one /DMO/I_Customer as _Customer on
@@ -74,6 +75,7 @@ association of one to one /DMO/I_Overall_Status_VH as _OverallStatus on
     last_changed_at as LastChangedAt,
     --expose the composition
     _Booking,
+    _Attachments,
     _Agency,
     _Customer,
     _Currency,

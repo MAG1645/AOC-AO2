@@ -63,6 +63,14 @@ annotate entity ZATS_AB_TRAVEL_PROCESSOR
             position: 20,
             label: 'Bookings',
             targetElement: '_Booking'  
+        },
+        {
+            purpose: #STANDARD,
+            type: #LINEITEM_REFERENCE,
+            id: 'idattach',
+            position: 30,
+            label: 'Attachments',
+            targetElement: '_Attachments'  
         }
         
     ]

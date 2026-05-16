@@ -8,6 +8,9 @@
 annotate entity ZATS_AB_BOOKSUPPL_PROCESSOR
     with 
 {
+    
+    //TravelId;
+    //BookingId;
     @UI.facet: [
         {  
             purpose: #STANDARD,
@@ -16,8 +19,6 @@ annotate entity ZATS_AB_BOOKSUPPL_PROCESSOR
             label: 'Supplement Info'
         }
     ]
-    //TravelId;
-    //BookingId;
     @UI.lineItem: [{ position: 10 }]
     @UI.identification: [{ position: 10 }]
     BookingSupplementId;

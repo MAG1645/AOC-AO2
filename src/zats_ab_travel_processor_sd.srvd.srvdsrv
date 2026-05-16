@@ -3,6 +3,7 @@ define service ZATS_AB_TRAVEL_PROCESSOR_SD {
   expose ZATS_AB_TRAVEL_PROCESSOR    as Travel;
   expose ZATS_AB_BOOKING_PROCESSOR   as Booking;
   expose ZATS_AB_BOOKSUPPL_PROCESSOR as BookingSupplement;
+  expose ZATS_AB_M_ATTACH_PROCESSOR  as Attachments;
   expose /DMO/I_Agency               as Agency;
   expose /DMO/I_Customer             as Customer;
   expose I_Currency                  as Currency;
