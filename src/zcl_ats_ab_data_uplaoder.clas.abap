@@ -14,7 +14,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_ats_ab_data_uplaoder IMPLEMENTATION.
+CLASS ZCL_ATS_AB_DATA_UPLAODER IMPLEMENTATION.
 
 
  METHOD fill_master_data.
@@ -161,6 +161,7 @@ CLASS zcl_ats_ab_data_uplaoder IMPLEMENTATION.
      insert zats_ab_product from table @lt_prod.
   ENDMETHOD.
 
+
   METHOD fill_transaction_data.
     data : o_rand type REF TO cl_abap_random_int,
            n type i,
@@ -219,9 +220,11 @@ CLASS zcl_ats_ab_data_uplaoder IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD flush.
     delete from : zats_ab_bpa, zats_ab_product, zats_ab_so_hdr, zats_ab_so_item.
   ENDMETHOD.
+
 
   METHOD if_oo_adt_classrun~main.
     me->flush( ).
@@ -235,5 +238,4 @@ CLASS zcl_ats_ab_data_uplaoder IMPLEMENTATION.
 *        output =
     ).
   ENDMETHOD.
-
 ENDCLASS.

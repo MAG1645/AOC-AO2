@@ -12,7 +12,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_ats_ab_first_class IMPLEMENTATION.
+CLASS ZCL_ATS_AB_FIRST_CLASS IMPLEMENTATION.
 
 
   METHOD if_oo_adt_classrun~main.
@@ -32,8 +32,3 @@ CLASS zcl_ats_ab_first_class IMPLEMENTATION.
 
   ENDMETHOD.
 ENDCLASS.
-
-
-
-
-

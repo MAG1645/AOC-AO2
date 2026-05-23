@@ -12,7 +12,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_ats_ab_mission_mars IMPLEMENTATION.
+CLASS ZCL_ATS_AB_MISSION_MARS IMPLEMENTATION.
 
 
   METHOD if_oo_adt_classrun~main.

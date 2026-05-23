@@ -13,7 +13,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_ats_ab_ve IMPLEMENTATION.
+CLASS ZCL_ATS_AB_VE IMPLEMENTATION.
 
 
   METHOD if_sadl_exit_calc_element_read~calculate.
@@ -42,5 +42,4 @@ CLASS zcl_ats_ab_ve IMPLEMENTATION.
   METHOD if_sadl_exit_calc_element_read~get_calculation_info.
 
   ENDMETHOD.
-
 ENDCLASS.

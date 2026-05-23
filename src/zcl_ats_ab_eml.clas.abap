@@ -14,7 +14,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_ats_ab_eml IMPLEMENTATION.
+CLASS ZCL_ATS_AB_EML IMPLEMENTATION.
 
 
   METHOD if_oo_adt_classrun~main.

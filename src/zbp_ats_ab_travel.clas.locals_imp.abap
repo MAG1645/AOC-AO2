@@ -644,17 +644,7 @@ CLASS lhc_Travel IMPLEMENTATION.
 
     endloop.
 
-
-
-
-
-
-
-
-
   ENDMETHOD.
-
-
 
   METHOD precheck_anubhav_reuse.
 
